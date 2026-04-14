@@ -1,7 +1,7 @@
 # Báo Cáo Cá Nhân — Lab Day 09: Multi-Agent Orchestration
 
-**Họ và tên:** Quang Hien  
-**Vai trò trong nhóm:** Trace & Integration Owner (Member E)  
+**Họ và tên:** Ho Quang Hien  
+**Vai trò trong nhóm:** Trace & Integration Owner 
 **Ngày nộp:** 2026-04-14
 
 ---
