@@ -5,9 +5,9 @@ Sprint 2: Retrieval evidence chunks.
 NOTE (stability on mac/conda):
 - Một số môi trường (đặc biệt Anaconda + numpy BLAS) có thể segfault khi import
   các package nặng như `chromadb` hoặc `sentence_transformers`.
-- Để đảm bảo `python graph.py` luôn chạy được cho grading, worker này mặc định
-  dùng lexical retrieval (không phụ thuộc numpy/chroma/torch).
-- Nếu môi trường của bạn ổn định và muốn dùng ChromaDB, set `USE_CHROMA=1`.
+- Worker mặc định ưu tiên Chroma dense retrieval với OpenAI embedding;
+  nếu dense bị lỗi sẽ fallback lexical
+  để không làm vỡ pipeline.
 
 Input (từ AgentState):
     - task: câu hỏi cần retrieve
@@ -37,6 +37,7 @@ DEFAULT_TOP_K = 3
 TOP_K_SEARCH = 10       # Số chunks query từ ChromaDB
 TOP_K_SELECT = 3        # Số chunks handoff cho synthesis
 ABSTAIN_THRESHOLD = 0.3 # Lọc bỏ chunk có score < threshold
+_MINILM_MODEL = None
 
 
 def _tokenize(text: str) -> list[str]:
@@ -105,10 +106,9 @@ def retrieve_lexical(query: str, top_k_select: int = TOP_K_SELECT) -> list:
 
     scored.sort(key=lambda x: x[0], reverse=True)
 
-    chunks = []
-    for score, source, chunk in scored[: max(top_k_select * 3, top_k_select)]:
-        # Map to expected schema
-        chunks.append(
+    candidates = []
+    for score, source, chunk in scored[: max(top_k_select * 4, top_k_select)]:
+        candidates.append(
             {
                 "text": chunk,
                 "source": source,
@@ -117,9 +117,33 @@ def retrieve_lexical(query: str, top_k_select: int = TOP_K_SELECT) -> list:
             }
         )
 
-    # Apply abstain threshold + cap
-    chunks = [c for c in chunks if c["score"] >= ABSTAIN_THRESHOLD]
-    return chunks[:top_k_select]
+    # Apply abstain threshold first.
+    candidates = [c for c in candidates if c["score"] >= ABSTAIN_THRESHOLD]
+    if not candidates:
+        return []
+
+    # Keep source diversity for multi-hop questions:
+    # pick best chunk per source first, then fill remaining slots by score.
+    selected = []
+    seen_sources = set()
+    for c in candidates:
+        src = c["source"]
+        if src in seen_sources:
+            continue
+        selected.append(c)
+        seen_sources.add(src)
+        if len(selected) >= top_k_select:
+            return selected
+
+    if len(selected) < top_k_select:
+        for c in candidates:
+            if c in selected:
+                continue
+            selected.append(c)
+            if len(selected) >= top_k_select:
+                break
+
+    return selected[:top_k_select]
 
 
 def _get_collection():
@@ -144,46 +168,62 @@ def _get_collection():
     return collection
 
 
-def _fallback_text_search(query: str, top_k: int = TOP_K_SELECT) -> list:
+def _embed_query_minilm(query: str) -> list[float]:
     """
-    Fallback: keyword search qua data/docs/*.txt khi ChromaDB không khả dụng.
-    Dùng để đảm bảo search_kb luôn trả về kết quả có ý nghĩa.
+    Embed query bằng model local all-MiniLM-L6-v2 (dim=384).
+    Phù hợp với index build theo README Day 09.
     """
-    import glob
-    import re
+    global _MINILM_MODEL
+    if _MINILM_MODEL is None:
+        from sentence_transformers import SentenceTransformer
 
-    docs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "docs")
-    txt_files = glob.glob(os.path.join(docs_dir, "*.txt"))
+        model_name = os.getenv("DENSE_EMBED_MODEL", "all-MiniLM-L6-v2")
+        _MINILM_MODEL = SentenceTransformer(model_name)
+    return _MINILM_MODEL.encode(query).tolist()
 
-    # Chuẩn hóa query thành tập từ khóa
-    query_words = set(re.sub(r"[^\w\s]", "", query.lower()).split())
 
-    results = []
-    for filepath in txt_files:
-        source = os.path.basename(filepath)
-        try:
-            with open(filepath, encoding="utf-8") as f:
-                content = f.read()
-        except Exception:
+def _embed_query_openai(query: str) -> list[float]:
+    """Embed query bằng OpenAI (dim=1536)."""
+    from openai import OpenAI
+
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+    resp = client.embeddings.create(input=query, model=model)
+    return resp.data[0].embedding
+
+
+def _dense_query_with_embedding(
+    query_embedding: list[float],
+    top_k_search: int,
+    top_k_select: int,
+    retrieval_backend: str,
+) -> list:
+    collection = _get_collection()
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k_search,
+        include=["documents", "distances", "metadatas"],
+    )
+
+    chunks = []
+    for doc, dist, meta in zip(
+        results["documents"][0],
+        results["distances"][0],
+        results["metadatas"][0],
+    ):
+        score = round(1 - dist, 4)  # cosine similarity
+        if score < ABSTAIN_THRESHOLD:
             continue
-
-        # Tách thành các đoạn theo dòng trống
-        paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
-        for para in paragraphs:
-            para_lower = para.lower()
-            hits = sum(1 for w in query_words if w in para_lower)
-            if hits == 0:
-                continue
-            score = round(hits / max(len(query_words), 1), 4)
-            results.append({
-                "text": para[:500],
-                "source": source,
+        chunks.append(
+            {
+                "text": doc,
+                "source": (meta or {}).get("source", "unknown"),
                 "score": score,
-                "metadata": {"source": source},
-            })
+                "metadata": {**(meta or {}), "retrieval": f"dense:{retrieval_backend}"},
+            }
+        )
 
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:top_k]
+    return chunks[:top_k_select]
 
 
 def retrieve_dense(
@@ -199,47 +239,27 @@ def retrieve_dense(
     - Bước 2: Lọc bỏ chunk có score < ABSTAIN_THRESHOLD (0.3)
     - Bước 3: Trả về tối đa top_k_select (mặc định 3) chunks còn lại
 
-    Fallback: Nếu ChromaDB không khả dụng → keyword search qua data/docs/*.txt
-
     Returns:
         list of {"text": str, "source": str, "score": float, "metadata": dict}
     """
-    try:
-        # Import lazily to avoid hard crash unless explicitly enabled
-        from openai import OpenAI
+    backend = os.getenv("DENSE_EMBED_BACKEND", "openai").lower()
+    backends = [backend] if backend in {"minilm", "openai"} else ["minilm", "openai"]
+    last_error = None
 
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        resp = client.embeddings.create(input=query, model="text-embedding-3-small")
-        query_embedding = resp.data[0].embedding
+    for b in backends:
+        try:
+            if b == "minilm":
+                emb = _embed_query_minilm(query)
+            else:
+                emb = _embed_query_openai(query)
+            return _dense_query_with_embedding(emb, top_k_search, top_k_select, b)
+        except Exception as e:
+            last_error = e
+            continue
 
-        collection = _get_collection()
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k_search,
-            include=["documents", "distances", "metadatas"]
-        )
-
-        chunks = []
-        for doc, dist, meta in zip(
-            results["documents"][0],
-            results["distances"][0],
-            results["metadatas"][0]
-        ):
-            score = round(1 - dist, 4)  # cosine similarity
-            if score < ABSTAIN_THRESHOLD:
-                continue  # Lọc bỏ chunk dưới threshold
-            chunks.append({
-                "text": doc,
-                "source": meta.get("source", "unknown"),
-                "score": score,
-                "metadata": meta,
-            })
-
-        return chunks[:top_k_select]
-
-    except Exception as e:
-        print(f"⚠️  ChromaDB query failed: {e}. Falling back to text search.")
-        return _fallback_text_search(query, top_k=top_k_select)
+    print(f"⚠️  ChromaDB query failed: {last_error}")
+    # Fallback an toàn: quay về lexical retrieval để không làm vỡ pipeline.
+    return retrieve_lexical(query, top_k_select=top_k_select)
 
 
 def run(state: dict) -> dict:
@@ -271,7 +291,7 @@ def run(state: dict) -> dict:
     }
 
     try:
-        use_chroma = str(os.getenv("USE_CHROMA", "0")).lower() in {"1", "true", "yes"}
+        use_chroma = str(os.getenv("USE_CHROMA", "1")).lower() in {"1", "true", "yes"}
         if use_chroma:
             top_k_search = state.get("retrieval_top_k_search", TOP_K_SEARCH)
             chunks = retrieve_dense(task, top_k_search=top_k_search, top_k_select=top_k_select)

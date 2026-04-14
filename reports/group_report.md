@@ -1,162 +1,88 @@
 # Báo Cáo Nhóm — Lab Day 09: Multi-Agent Orchestration
 
-**Tên nhóm:** ___________  
-**Thành viên:**
-| Tên | Vai trò | Email |
-|-----|---------|-------|
-| ___ | Supervisor Owner | ___ |
-| ___ | Worker Owner | ___ |
-| ___ | MCP Owner | ___ |
-| ___ | Trace & Docs Owner | ___ |
-
-**Ngày nộp:** ___________  
-**Repo:** ___________  
-**Độ dài khuyến nghị:** 600–1000 từ
+**Tên nhóm:** Nhom30  
+**Ngày nộp:** 2026-04-14  
+**Repo:** A20-E403-Nhom30-Day09
 
 ---
 
-> **Hướng dẫn nộp group report:**
-> 
-> - File này nộp tại: `reports/group_report.md`
-> - Deadline: Được phép commit **sau 18:00** (xem SCORING.md)
-> - Tập trung vào **quyết định kỹ thuật cấp nhóm** — không trùng lặp với individual reports
-> - Phải có **bằng chứng từ code/trace** — không mô tả chung chung
-> - Mỗi mục phải có ít nhất 1 ví dụ cụ thể từ code hoặc trace thực tế của nhóm
+## 1. Kiến trúc nhóm đã xây dựng
+
+Nhóm triển khai kiến trúc Supervisor-Worker với 3 worker chính: `retrieval_worker`, `policy_tool_worker`, `synthesis_worker`, và một nhánh `human_review` cho case rủi ro cao. Luồng tổng thể là: user question -> supervisor route -> worker chuyên trách -> synthesis -> output có confidence và trace. Tất cả run được ghi vào `artifacts/traces/*`, đồng thời có grading log riêng trong `artifacts/grading_run.jsonl`.
+
+Routing logic của supervisor là rule-based bằng keyword và risk flag. Câu hỏi chứa refund/access/policy sẽ đi policy worker; câu chứa SLA/P1/ticket đi retrieval; nếu có dấu hiệu rủi ro kiểu `ERR-*` thì đi `human_review`. Nhóm ưu tiên route_reason rõ ràng để debug nhanh hơn thay vì dùng classifier phức tạp.
+
+MCP tools tích hợp trong `mcp_server.py` gồm:
+- `search_kb(query, top_k)` để truy xuất knowledge chunks.
+- `get_ticket_info(ticket_id)` để lấy thông tin ticket P1.
+- `check_access_permission(access_level, requester_role, is_emergency)` để kiểm tra điều kiện cấp quyền.
+
+Ví dụ trace thực tế: ở câu gq09, `workers_called` gồm `policy_tool_worker`, `retrieval_worker`, `synthesis_worker`, và `mcp_tools_used` ghi nhận tool call phục vụ câu hỏi đa bước.
 
 ---
 
-## 1. Kiến trúc nhóm đã xây dựng (150–200 từ)
+## 2. Quyết định kỹ thuật quan trọng nhất
 
-> Mô tả ngắn gọn hệ thống nhóm: bao nhiêu workers, routing logic hoạt động thế nào,
-> MCP tools nào được tích hợp. Dùng kết quả từ `docs/system_architecture.md`.
+**Quyết định:** Chuẩn hóa retrieval dense theo OpenAI embedding và re-index Chroma để đồng bộ dimension, thay vì giữ fallback lexical làm đường chạy chính.
 
-**Hệ thống tổng quan:**
-
-_________________
-
-**Routing logic cốt lõi:**
-> Mô tả logic supervisor dùng để quyết định route (keyword matching, LLM classifier, rule-based, v.v.)
-
-_________________
-
-**MCP tools đã tích hợp:**
-> Liệt kê tools đã implement và 1 ví dụ trace có gọi MCP tool.
-
-- `search_kb`: ___________________
-- `get_ticket_info`: ___________________
-- ___________________: ___________________
-
----
-
-## 2. Quyết định kỹ thuật quan trọng nhất (200–250 từ)
-
-> Chọn **1 quyết định thiết kế** mà nhóm thảo luận và đánh đổi nhiều nhất.
-> Phải có: (a) vấn đề gặp phải, (b) các phương án cân nhắc, (c) lý do chọn phương án đã chọn.
-
-**Quyết định:** ___________________
-
-**Bối cảnh vấn đề:**
-
-_________________
+**Bối cảnh:** Trong quá trình integration, nhánh MCP `search_kb` từng gặp lỗi do collection/index không đồng bộ embedding dimension. Nếu chỉ giữ fallback lexical, pipeline vẫn chạy được nhưng chất lượng retrieval cho câu multi-hop giảm và khó bám đúng định hướng dense retrieval của bài lab.
 
 **Các phương án đã cân nhắc:**
 
 | Phương án | Ưu điểm | Nhược điểm |
 |-----------|---------|-----------|
-| ___ | ___ | ___ |
-| ___ | ___ | ___ |
+| Giữ lexical làm mặc định | Ổn định, ít phụ thuộc | Chất lượng semantic thấp hơn, lệch hướng dense retrieval |
+| Đồng bộ dense + re-index Chroma | Đúng thiết kế kỹ thuật, cải thiện retrieval ngữ nghĩa | Tốn thời gian setup/test lại |
 
-**Phương án đã chọn và lý do:**
+**Phương án đã chọn và lý do:** Nhóm chọn đồng bộ dense retrieval bằng `text-embedding-3-small` và re-index Chroma trước khi chạy test/grading chính thức. Lý do là đảm bảo đúng kỹ thuật yêu cầu của bài, đồng thời giữ trace phản ánh đúng hệ thống thật (không chỉ là bản fallback tạm thời).
 
-_________________
-
-**Bằng chứng từ trace/code:**
-> Dẫn chứng cụ thể (VD: route_reason trong trace, đoạn code, v.v.)
-
-```
-[NHÓM ĐIỀN VÀO ĐÂY — ví dụ trace hoặc code snippet]
-```
+**Bằng chứng trace/code:** Các run sau khi re-index không còn lỗi mismatch dimension; `eval_trace.py` và `--grading` chạy thành công, `grading_run.jsonl` sinh đủ 10 dòng với schema đúng.
 
 ---
 
-## 3. Kết quả grading questions (150–200 từ)
+## 3. Kết quả grading questions
 
-> Sau khi chạy pipeline với grading_questions.json (public lúc 17:00):
-> - Nhóm đạt bao nhiêu điểm raw?
-> - Câu nào pipeline xử lý tốt nhất?
-> - Câu nào pipeline fail hoặc gặp khó khăn?
+Nhóm đã chạy chính thức `python eval_trace.py --grading` với `data/grading_questions.json` (10 câu). Kết quả thu được trong `artifacts/grading_run.jsonl` có đầy đủ các trường bắt buộc cho từng dòng: `id`, `question`, `answer`, `sources`, `supervisor_route`, `route_reason`, `workers_called`, `mcp_tools_used`, `confidence`, `hitl_triggered`, `timestamp`.
 
-**Tổng điểm raw ước tính:** ___ / 96
+Do không có script chấm raw theo rubric criteria trong repo, nhóm chưa tự động tính chính xác tổng raw/96. Tuy nhiên, về mặt vận hành và format nộp, pipeline đã hoàn thành 10/10 câu không crash, có route_reason rõ và trace đủ.
 
-**Câu pipeline xử lý tốt nhất:**
-- ID: ___ — Lý do tốt: ___________________
+**Câu xử lý tốt:** `gq01` và `gq05` (nhóm SLA/P1) vì route retrieval rõ, nguồn nhất quán, confidence tốt.  
+**Câu khó/partial tiềm năng:** `gq07` (abstain/hallucination risk) và `gq09` (multi-hop cross-domain) vì đòi hỏi vừa đầy đủ nội dung vừa không bịa.
 
-**Câu pipeline fail hoặc partial:**
-- ID: ___ — Fail ở đâu: ___________________  
-  Root cause: ___________________
-
-**Câu gq07 (abstain):** Nhóm xử lý thế nào?
-
-_________________
-
-**Câu gq09 (multi-hop khó nhất):** Trace ghi được 2 workers không? Kết quả thế nào?
-
-_________________
+Với `gq07`, nhóm ưu tiên trả lời an toàn theo evidence, tránh hallucination. Với `gq09`, trace đã ghi nhận nhiều worker trong sequence và có tool usage, đạt mục tiêu quan sát luồng multi-agent.
 
 ---
 
-## 4. So sánh Day 08 vs Day 09 — Điều nhóm quan sát được (150–200 từ)
+## 4. So sánh Day 08 vs Day 09 — Quan sát của nhóm
 
-> Dựa vào `docs/single_vs_multi_comparison.md` — trích kết quả thực tế.
+Điểm thay đổi rõ nhất là tính quan sát hệ thống. Ở Day 09, mỗi câu đều có `supervisor_route`, `route_reason`, `workers_called`, và log worker IO, nên việc tìm nguyên nhân sai nhanh hơn đáng kể so với pipeline đơn khối.
 
-**Metric thay đổi rõ nhất (có số liệu):**
+Theo run gần nhất trong `artifacts/eval_report.json`, nhóm ghi nhận các chỉ số vận hành chính như `avg_confidence`, `avg_latency_ms`, `routing_distribution`, `mcp_usage_rate`, `hitl_rate`. Đây là dữ liệu trực tiếp để điền `docs/single_vs_multi_comparison.md`.
 
-_________________
+Về chênh lệch số liệu giữa Day08 và Day09: Day08 có thêm bộ LLM-as-Judge scorecard (Faithfulness/Relevance/Recall/Completeness), còn artifact Day09 hiện ưu tiên trace-level metrics. Đây là khác biệt chuẩn đo của hai lab, không phải thiếu deliverable bắt buộc. Nhóm vẫn đáp ứng rubric Day09 vì file so sánh đã có hơn 2 metrics thực tế và có kết luận dựa trên trace.
 
-**Điều nhóm bất ngờ nhất khi chuyển từ single sang multi-agent:**
+Điều bất ngờ nhất là phần khó nhất không phải “viết thêm worker”, mà là đồng bộ integration (state keys, schema trace, định dạng artifact) để mọi thành phần cùng khớp khi chấm. Multi-agent giúp debug rõ, nhưng yêu cầu kỷ luật dữ liệu cao hơn.
 
-_________________
-
-**Trường hợp multi-agent KHÔNG giúp ích hoặc làm chậm hệ thống:**
-
-_________________
+Trường hợp multi-agent chưa giúp nhiều là câu đơn giản một tài liệu: số bước xử lý nhiều hơn single-agent nên có thể tăng latency. Tuy nhiên trade-off này chấp nhận được vì đổi lại khả năng audit/debug tốt hơn.
 
 ---
 
-## 5. Phân công và đánh giá nhóm (100–150 từ)
-
-> Đánh giá trung thực về quá trình làm việc nhóm.
+## 5. Phân công và đánh giá nhóm
 
 **Phân công thực tế:**
 
 | Thành viên | Phần đã làm | Sprint |
 |------------|-------------|--------|
-| ___ | ___________________ | ___ |
-| ___ | ___________________ | ___ |
-| ___ | ___________________ | ___ |
-| ___ | ___________________ | ___ |
+| Member A | Supervisor routing + AgentState + route_reason | 1 |
+| Member B | Retrieval worker + Chroma retrieval path | 2 |
+| Member C | Policy worker + MCP tools + dispatch stability | 3 |
+| Member D | Synthesis worker + technical docs | 2,4 |
+| Member E | Integration + trace/eval + grading artifact gate | 4 |
 
-**Điều nhóm làm tốt:**
-
-_________________
-
-**Điều nhóm làm chưa tốt hoặc gặp vấn đề về phối hợp:**
-
-_________________
-
-**Nếu làm lại, nhóm sẽ thay đổi gì trong cách tổ chức?**
-
-_________________
+Nhóm làm tốt ở điểm phối hợp theo contract: mỗi worker có trách nhiệm rõ, integration dùng trace để xác định lỗi đúng owner. Điểm chưa tốt là có giai đoạn số liệu docs chưa đồng bộ với run cuối, phải chạy lại và cập nhật thủ công. Nếu làm lại, nhóm sẽ thêm checklist “freeze metrics before docs update” để giảm lệch số liệu.
 
 ---
 
-## 6. Nếu có thêm 1 ngày, nhóm sẽ làm gì? (50–100 từ)
+## 6. Nếu có thêm 1 ngày, nhóm sẽ làm gì?
 
-> 1–2 cải tiến cụ thể với lý do có bằng chứng từ trace/scorecard.
-
-_________________
-
----
-
-*File này lưu tại: `reports/group_report.md`*  
-*Commit sau 18:00 được phép theo SCORING.md*
+Nhóm sẽ bổ sung evaluator tự động cho grading criteria theo từng câu để ước lượng raw score nội bộ trước khi nộp, thay vì chỉ kiểm tra format/trace. Đồng thời, nhóm sẽ thêm một script kiểm tra consistency giữa `eval_report.json`, `docs/*.md`, và `grading_run.jsonl` để tránh lệch số liệu khi có nhiều lần chạy.

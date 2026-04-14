@@ -95,17 +95,23 @@ def run_grading_questions(questions_file: str = "data/grading_questions.json") -
     Returns:
         path tới grading_run.jsonl
     """
+    question_source = questions_file
     if not os.path.exists(questions_file):
-        print(f"❌ {questions_file} chưa được public (sau 17:00 mới có).")
-        return ""
+        fallback_file = "data/test_questions.json"
+        if not os.path.exists(fallback_file):
+            print(f"❌ Không tìm thấy {questions_file} và cũng không có {fallback_file}.")
+            return ""
+        question_source = fallback_file
+        print(f"⚠️  {questions_file} chưa có. Dùng tạm {fallback_file} để kiểm tra format grading_run.jsonl.")
 
-    with open(questions_file, encoding="utf-8") as f:
+    with open(question_source, encoding="utf-8") as f:
         questions = json.load(f)
 
     os.makedirs("artifacts", exist_ok=True)
     output_file = "artifacts/grading_run.jsonl"
 
     print(f"\n🎯 Running GRADING questions — {len(questions)} câu")
+    print(f"   Question source → {question_source}")
     print(f"   Output → {output_file}")
     print("=" * 60)
 

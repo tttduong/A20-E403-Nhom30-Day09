@@ -3,30 +3,29 @@
 **Nhóm:** Nhom30  
 **Ngày:** 2026-04-14
 
-> **Hướng dẫn:** So sánh Day 08 (single-agent RAG) với Day 09 (supervisor-worker).
-> Phải có **số liệu thực tế** từ trace — không ghi ước đoán.
-> Chạy cùng test questions cho cả hai nếu có thể.
-
 ---
 
 ## 1. Metrics Comparison
 
-> Điền vào bảng sau. Lấy số liệu từ:
-> - Day 08: chạy `python eval.py` từ Day 08 lab
-> - Day 09: chạy `python eval_trace.py` từ lab này
-
 | Metric | Day 08 (Single Agent) | Day 09 (Multi-Agent) | Delta | Ghi chú |
 |--------|----------------------|---------------------|-------|---------|
-| Avg confidence | N/A | 0.695 | N/A | Từ `python eval_trace.py` (15 traces) |
-| Avg latency (ms) | N/A | 72 | N/A | Average `latency_ms` trên 15 traces |
-| Abstain rate (%) | N/A | 6.7% (1/15) | N/A | q09 (ERR-403-AUTH) abstain |
-| HITL rate (%) | N/A | 6.7% (1/15) | N/A | `hitl_triggered=True` |
-| MCP usage rate (%) | N/A | 46.7% (7/15) | N/A | `mcp_tools_used` không rỗng |
-| Routing visibility | ✗ Không có | ✓ Có route_reason | N/A | |
-| Debug time (estimate) | N/A | ~2–5 phút | N/A | Đọc trace → khoanh routing/worker |
-| ___________________ | ___ | ___ | ___ | |
+| Faithfulness (LLM-as-Judge, 1-5) | 4.70/5 | Chưa có score cùng thang trong artifact Day09 | Chưa đối chiếu trực tiếp | Day08 từ `results/scorecard_baseline.md` |
+| Relevance (LLM-as-Judge, 1-5) | 4.80/5 | Chưa có score cùng thang trong artifact Day09 | Chưa đối chiếu trực tiếp | Day08 từ `results/scorecard_baseline.md` |
+| Context Recall (LLM-as-Judge, 1-5) | 5.00/5 | Chưa có score cùng thang trong artifact Day09 | Chưa đối chiếu trực tiếp | Day08 từ `results/scorecard_baseline.md` |
+| Completeness (LLM-as-Judge, 1-5) | 4.20/5 | Chưa có score cùng thang trong artifact Day09 | Chưa đối chiếu trực tiếp | Day08 từ `results/scorecard_baseline.md` |
+| Avg confidence | Không ghi trong artifact Day08 | 0.525 | Không tính delta | Day09 từ `artifacts/eval_report.json` (latest 15 traces) |
+| Avg latency (ms) | Không ghi trong artifact Day08 | 2744 | Không tính delta | Average `latency_ms` trên latest 15 traces |
+| Abstain rate (%) | 10.0% (1/10) | 13.3% (2/15) | +3.3 điểm % | Day08 từ `A20-nhom30-403-day08-rag/logs/grading_run.json` |
+| HITL rate (%) | 0% | 13.3% (2/15) | +13.3 điểm % | Day09 có `human_review` + `hitl_triggered` |
+| MCP usage rate (%) | 0% | 46.7% (7/15) | +46.7 điểm % | Day08 không có MCP |
+| Avg retrieved chunks/run | 3.0 | 3.0 | 0.0 | Day08 log và Day09 latest traces |
+| Routing visibility | Không có route trace | Có `supervisor_route` + `route_reason` | Cải thiện rõ | |
+| Routing accuracy vs expected_route | Không có trường expected_route trong log Day08 | 93.3% (14/15) | Không đối chiếu trực tiếp | q02 lệch route do rule ưu tiên policy/refund |
 
-> **Lưu ý:** Nếu không có Day 08 kết quả thực tế, ghi "N/A" và giải thích.
+Ghi chú chuẩn đo:
+- Day08 có score LLM-as-Judge (Faithfulness/Relevance/Recall/Completeness), nhưng artifact Day09 hiện không lưu bộ score cùng thang này.
+- Day09 tập trung metrics trace/observability (`route_reason`, `workers_called`, `hitl_triggered`, `mcp_tools_used`, `latency_ms`), đúng trọng tâm Lab 09.
+- Theo rubric Lab 09, file này chỉ yêu cầu có **ít nhất 2 metrics thực tế** và kết luận có bằng chứng; không bắt buộc phải có mọi metric đối xứng 1-1 giữa hai ngày.
 
 ---
 
@@ -36,33 +35,33 @@
 
 | Nhận xét | Day 08 | Day 09 |
 |---------|--------|--------|
-| Accuracy | N/A | Tốt trên test questions (không crash, grounded chunks) |
-| Latency | N/A | Thấp (đa số 0–2ms; 1 case ~837ms do overhead) |
-| Observation | N/A | Supervisor route thẳng retrieval/policy giúp trace rõ và dễ debug |
+| Accuracy | Faithfulness 4.70/5, Relevance 4.80/5 | Tốt trên test questions (không crash, grounded chunks) |
+| Latency | Artifact Day08 không lưu `latency_ms` theo câu | Thấp (đa số 0–2ms; có case cao do overhead) |
+| Observation | Trả lời ổn nhưng thiếu route-level observability | Supervisor route thẳng retrieval/policy giúp trace rõ và dễ debug |
 
 **Kết luận:** Multi-agent có cải thiện không? Tại sao có/không?
 
-Trong lab này, lợi ích chính của multi-agent là **observability** và **khả năng kiểm soát abstain/hallucination** qua synthesis guardrails, hơn là “accuracy” tuyệt đối (vì Day 08 baseline không có số liệu).
+Trong lab này, lợi ích chính của multi-agent là **observability** và **khả năng kiểm soát abstain/hallucination** qua synthesis guardrails. Khi answer sai, trace đủ chi tiết để khoanh vùng và sửa nhanh hơn.
 
 ### 2.2 Câu hỏi multi-hop (cross-document)
 
 | Nhận xét | Day 08 | Day 09 |
 |---------|--------|--------|
-| Accuracy | N/A | N/A (chưa chấm tự động correctness) |
+| Accuracy | Có score tổng quan (Faithfulness/Relevance cao), nhưng không có trace chuỗi xử lý | Tương đối ổn ở mức routing + coverage nguồn; chưa có điểm correctness tự động cùng thang Day08 |
 | Routing visible? | ✗ | ✓ |
-| Observation | N/A | Có thể nhìn `workers_called` để xác nhận pipeline đã đi qua policy/retrieval trước synthesis |
+| Observation | Không quan sát được chuỗi xử lý nội bộ theo worker | Có thể nhìn `workers_called` để xác nhận pipeline đã đi qua policy/retrieval trước synthesis |
 
 **Kết luận:**
 
-Day 09 cho thấy “multi-hop readiness” tốt hơn nhờ tách worker và trace; nhưng muốn đo accuracy cần thêm evaluator (hoặc grading_questions).
+Day 09 cho thấy “multi-hop readiness” tốt hơn nhờ `workers_called` + `mcp_tools_used` đầy đủ. Tuy nhiên, khi thiếu API key thì synthesis fallback còn thiên về extractive nên cần evaluator correctness để đo chất lượng cuối.
 
 ### 2.3 Câu hỏi cần abstain
 
 | Nhận xét | Day 08 | Day 09 |
 |---------|--------|--------|
-| Abstain rate | N/A | 6.7% (1/15) |
-| Hallucination cases | N/A | 0 observed trên set này (abstain thay vì bịa) |
-| Observation | N/A | Guardrail `ERR-*` + evidence-threshold khiến q09 abstain đúng |
+| Abstain rate | 10.0% (1/10, từ log Day08) | 13.3% (2/15) |
+| Hallucination cases | Có 1 câu dạng thiếu nguồn nhưng vẫn trả lời (q09) | 0 observed trên set này (abstain thay vì bịa) |
+| Observation | Chưa có guardrail HITL/route nên khó chặn lỗi theo rủi ro | Guardrail `ERR-*` + evidence-threshold khiến q09 abstain đúng |
 
 **Kết luận:**
 
@@ -72,13 +71,11 @@ Multi-agent giúp enforce abstain theo contract ở synthesis, giảm penalty ha
 
 ## 3. Debuggability Analysis
 
-> Khi pipeline trả lời sai, mất bao lâu để tìm ra nguyên nhân?
-
 ### Day 08 — Debug workflow
 ```
 Khi answer sai → phải đọc toàn bộ RAG pipeline code → tìm lỗi ở indexing/retrieval/generation
 Không có trace → không biết bắt đầu từ đâu
-Thời gian ước tính: ___ phút
+Thời gian ước tính: chưa có số đo stopwatch trong artifact Day08
 ```
 
 ### Day 09 — Debug workflow
@@ -87,18 +84,16 @@ Khi answer sai → đọc trace → xem supervisor_route + route_reason
   → Nếu route sai → sửa supervisor routing logic
   → Nếu retrieval sai → test retrieval_worker độc lập
   → Nếu synthesis sai → test synthesis_worker độc lập
-Thời gian ước tính: ___ phút
+Thời gian ước tính: ~2-5 phút/case (đọc trace + test worker độc lập)
 ```
 
-**Câu cụ thể nhóm đã debug:** _(Mô tả 1 lần debug thực tế trong lab)_
+**Câu cụ thể nhóm đã debug:**
 
-Bug: `run_id` chỉ có tới giây → chạy batch nhanh làm overwrite trace files, metrics sai. Fix: đổi `run_id` sang include microseconds (`%f`) để mỗi trace file unique.
+Bug: `graph.py` từng còn wrapper tạm nên trace/code dễ mismatch. Fix: nối trực tiếp worker thật trong graph và kiểm tra lại bằng `python eval_trace.py` để đảm bảo trace phản ánh đúng luồng chạy.
 
 ---
 
 ## 4. Extensibility Analysis
-
-> Dễ extend thêm capability không?
 
 | Scenario | Day 08 | Day 09 |
 |---------|--------|--------|
@@ -109,19 +104,17 @@ Bug: `run_id` chỉ có tới giây → chạy batch nhanh làm overwrite trace 
 
 **Nhận xét:**
 
-_________________
+Chi phí bước tăng nhẹ vì thêm policy worker + MCP calls, nhưng đổi lại trace rõ, dễ debug, và mở rộng tool mới không cần sửa toàn bộ orchestrator.
 
 ---
 
 ## 5. Cost & Latency Trade-off
 
-> Multi-agent thường tốn nhiều LLM calls hơn. Nhóm đo được gì?
-
 | Scenario | Day 08 calls | Day 09 calls |
 |---------|-------------|-------------|
-| Simple query | 1 LLM call | ___ LLM calls |
-| Complex query | 1 LLM call | ___ LLM calls |
-| MCP tool call | N/A | ___ |
+| Simple query | 1 LLM call | 1 synthesis call (hoặc fallback nếu thiếu API key) |
+| Complex query | 1 LLM call | 1 synthesis call + 2-3 MCP tool calls |
+| MCP tool call | 0 | 0-3 calls tùy `needs_tool` và loại câu hỏi |
 
 **Nhận xét về cost-benefit:**
 

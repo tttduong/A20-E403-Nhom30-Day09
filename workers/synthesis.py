@@ -94,6 +94,38 @@ def _build_context(chunks: list, policy_result: dict) -> str:
                 else:
                     parts.append(f"- {rule}")
 
+        access_decision = policy_result.get("access_decision")
+        if access_decision:
+            parts.append("\n=== ACCESS DECISION (MCP) ===")
+            parts.append(
+                "access_level={level}, can_grant={grant}, approvers={approvers}, emergency_override={override}, source={source}".format(
+                    level=access_decision.get("access_level"),
+                    grant=access_decision.get("can_grant"),
+                    approvers=access_decision.get("required_approvers"),
+                    override=access_decision.get("emergency_override"),
+                    source=access_decision.get("source", "unknown"),
+                )
+            )
+            notes = access_decision.get("notes", [])
+            if notes:
+                parts.append("notes: " + " | ".join([str(n) for n in notes if n]))
+
+        ticket_info = policy_result.get("ticket_info")
+        if ticket_info:
+            parts.append("\n=== TICKET INFO (MCP) ===")
+            parts.append(
+                "ticket_id={ticket_id}, priority={priority}, status={status}, assignee={assignee}, "
+                "created_at={created_at}, sla_deadline={deadline}, notifications={notifications}".format(
+                    ticket_id=ticket_info.get("ticket_id"),
+                    priority=ticket_info.get("priority"),
+                    status=ticket_info.get("status"),
+                    assignee=ticket_info.get("assignee"),
+                    created_at=ticket_info.get("created_at"),
+                    deadline=ticket_info.get("sla_deadline"),
+                    notifications=ticket_info.get("notifications_sent", []),
+                )
+            )
+
     if not parts:
         return "(Không có context)"
 
@@ -182,6 +214,42 @@ def _fallback_summarize(task: str, chunks: list, policy_result: dict) -> str:
                 lines.append(f"- {rule}" + (f" [{src}]" if src else ""))
         if lines:
             return "\n".join(lines)
+
+    # Structured fallback for access/ticket flows when LLM is unavailable.
+    access_decision = (policy_result or {}).get("access_decision") if policy_result else None
+    ticket_info = (policy_result or {}).get("ticket_info") if policy_result else None
+    if access_decision or ticket_info:
+        lines = []
+        if ticket_info:
+            lines.append(
+                "Thông tin ticket {ticket_id}: priority={priority}, status={status}.".format(
+                    ticket_id=ticket_info.get("ticket_id", "unknown"),
+                    priority=ticket_info.get("priority", "unknown"),
+                    status=ticket_info.get("status", "unknown"),
+                )
+            )
+            notifications = ticket_info.get("notifications_sent", [])
+            if notifications:
+                lines.append("Kênh notify hiện có: " + ", ".join([str(n) for n in notifications]))
+            if ticket_info.get("escalated_to"):
+                lines.append(f"Đang escalate tới: {ticket_info.get('escalated_to')}.")
+            if ticket_info.get("created_at"):
+                lines.append(f"Thời điểm tạo ticket: {ticket_info.get('created_at')}.")
+
+        if access_decision:
+            lines.append(
+                "Access Level {level}: emergency_override={override}, required_approvers={approvers}.".format(
+                    level=access_decision.get("access_level", "unknown"),
+                    override=access_decision.get("emergency_override", False),
+                    approvers=", ".join(access_decision.get("required_approvers", [])),
+                )
+            )
+            for note in access_decision.get("notes", []):
+                if note:
+                    lines.append(str(note))
+            if access_decision.get("source"):
+                lines.append(f"Nguồn: [{access_decision.get('source')}]")
+        return "\n".join(lines)
 
     # Otherwise: return the most relevant chunk verbatim (trimmed).
     best = None

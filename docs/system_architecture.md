@@ -24,9 +24,6 @@ Hệ thống trả lời câu hỏi nội bộ CS + IT Helpdesk theo kiến trú
 
 ## 2. Sơ đồ Pipeline
 
-> Vẽ sơ đồ pipeline dưới dạng text, Mermaid diagram, hoặc ASCII art.
-> Yêu cầu tối thiểu: thể hiện rõ luồng từ input → supervisor → workers → output.
-
 **Ví dụ (ASCII art):**
 ```
 User Request
@@ -69,7 +66,7 @@ Supervisor (graph.py)
   +--> policy_tool_worker (optional MCP) -----+--> synthesis_worker
   |        - outputs: policy_result, mcp_tools_used     - outputs: final_answer, sources, confidence
   |
-  +--> human_review (HITL placeholder) --(auto approve)--> retrieval_worker --> synthesis_worker
+  +--> human_review (HITL lab-mode, auto approve) --> retrieval_worker --> synthesis_worker
 ```
 
 ---
@@ -90,8 +87,8 @@ Supervisor (graph.py)
 
 | Thuộc tính | Mô tả |
 |-----------|-------|
-| **Nhiệm vụ** | Retrieve chunks từ `data/docs/*` (lexical fallback mặc định để tránh segfault dependency), trả `retrieved_chunks`, `retrieved_sources` |
-| **Embedding model** | Mặc định: lexical overlap (không embedding). Tuỳ chọn: Chroma + OpenAI embeddings nếu set `USE_CHROMA=1` |
+| **Nhiệm vụ** | Retrieve chunks từ `data/docs/*`, ưu tiên dense retrieval qua Chroma và fallback lexical khi dense lỗi, trả `retrieved_chunks`, `retrieved_sources` |
+| **Embedding model** | Dense mặc định: OpenAI `text-embedding-3-small` (khi `USE_CHROMA=1`); fallback lexical overlap khi không truy vấn được Chroma |
 | **Top-k** | select = 3 (config `retrieval_top_k`) |
 | **Stateless?** | Yes |
 
@@ -100,7 +97,7 @@ Supervisor (graph.py)
 | Thuộc tính | Mô tả |
 |-----------|-------|
 | **Nhiệm vụ** | Phân tích policy và exception cases; khi `needs_tool=True` thì gọi MCP tools để bổ sung context |
-| **MCP tools gọi** | `search_kb`, `get_ticket_info` (mock in-process) |
+| **MCP tools gọi** | `search_kb`, `get_ticket_info`, `check_access_permission` (mock in-process) |
 | **Exception cases xử lý** | flash_sale, digital_product (license/subscription), activated_product; có note về temporal scoping (trước 01/02/2026) |
 
 ### Synthesis Worker (`workers/synthesis.py`)
@@ -124,8 +121,6 @@ Supervisor (graph.py)
 ---
 
 ## 4. Shared State Schema
-
-> Liệt kê các fields trong AgentState và ý nghĩa của từng field.
 
 | Field | Type | Mô tả | Ai đọc/ghi |
 |-------|------|-------|-----------|
@@ -160,8 +155,6 @@ Supervisor (graph.py)
 
 ## 6. Giới hạn và điểm cần cải tiến
 
-> Nhóm mô tả những điểm hạn chế của kiến trúc hiện tại.
-
 1. Trong môi trường thiếu API key, LLM unavailable → cần fallback extractive (đã thêm) nhưng vẫn kém chất lượng so với LLM.
 2. Lexical retrieval có thể retrieve chunks “nhiễu” (vd câu HR kéo nhầm refund chunk) → cần rerank/filters tốt hơn.
-3. HITL hiện là placeholder auto-approve → nếu triển khai thật cần UI/queue và điều kiện trigger rõ hơn.
+3. HITL hiện chạy theo cơ chế lab-mode auto-approve → nếu triển khai thật cần UI/queue và điều kiện trigger rõ hơn.

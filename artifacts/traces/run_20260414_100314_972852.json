@@ -1,0 +1,98 @@
+{
+  "task": "Ticket P1 được tạo lúc 22:47. Ai sẽ nhận thông báo đầu tiên và qua kênh nào? Escalation xảy ra lúc mấy giờ?",
+  "route_reason": "Task contains SLA/P1/Ticket keyword -> retrieval_worker",
+  "risk_high": false,
+  "needs_tool": false,
+  "hitl_triggered": false,
+  "retrieved_chunks": [
+    {
+      "text": "Ticket P1:\n- Phản hồi ban đầu (first response): 15 phút kể từ khi ticket được tạo.\n- Xử lý và khắc phục (resolution): 4 giờ.\n- Escalation: Tự động escalate lên Senior Engineer nếu không có phản hồi trong 10 phút.\n- Thông báo stakeholder: Ngay khi nhận ticket, update mỗi 30 phút cho đến khi resolve.",
+      "source": "sla_p1_2026.txt",
+      "score": 0.6751,
+      "metadata": {
+        "source": "sla_p1_2026.txt",
+        "chunk_index": 7,
+        "retrieval": "dense:openai"
+      }
+    },
+    {
+      "text": "Ticket P2:\n- Phản hồi ban đầu: 2 giờ.\n- Xử lý và khắc phục: 1 ngày làm việc.\n- Escalation: Tự động escalate sau 90 phút không có phản hồi.",
+      "source": "sla_p1_2026.txt",
+      "score": 0.6502,
+      "metadata": {
+        "source": "sla_p1_2026.txt",
+        "chunk_index": 8,
+        "retrieval": "dense:openai"
+      }
+    },
+    {
+      "text": "Bước 1: Tiếp nhận\nOn-call engineer nhận alert hoặc ticket, xác nhận severity trong 5 phút.",
+      "source": "sla_p1_2026.txt",
+      "score": 0.5736,
+      "metadata": {
+        "source": "sla_p1_2026.txt",
+        "chunk_index": 12,
+        "retrieval": "dense:openai"
+      }
+    }
+  ],
+  "retrieved_sources": [
+    "sla_p1_2026.txt"
+  ],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "final_answer": "1. Người nhận thông báo đầu tiên sẽ là on-call engineer qua kênh alert hoặc ticket ngay khi ticket được tạo [1].\n2. Escalation sẽ xảy ra sau 10 phút nếu không có phản hồi [1]. \n\nDo ticket P1 được tạo lúc 22:47, escalation sẽ xảy ra lúc 22:57 [1].\n\nNguồn: [sla_p1_2026.txt]\n",
+  "sources": [
+    "sla_p1_2026.txt"
+  ],
+  "confidence": 0.63,
+  "history": [
+    "[supervisor] received task: Ticket P1 được tạo lúc 22:47. Ai sẽ nhận thông báo đầu tiên và qua kênh nào? Esc",
+    "[supervisor] route=retrieval_worker reason=Task contains SLA/P1/Ticket keyword -> retrieval_worker",
+    "[retrieval_worker] retrieved 3 chunks from ['sla_p1_2026.txt']",
+    "[synthesis_worker] answer generated, confidence=0.63, sources=['sla_p1_2026.txt']",
+    "[graph] completed in 2281ms"
+  ],
+  "workers_called": [
+    "retrieval_worker",
+    "synthesis_worker"
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 2281,
+  "run_id": "run_20260414_100314_972852",
+  "timestamp": "2026-04-14T10:03:14.972872",
+  "worker_io_logs": [
+    {
+      "worker": "retrieval_worker",
+      "input": {
+        "task": "Ticket P1 được tạo lúc 22:47. Ai sẽ nhận thông báo đầu tiên và qua kênh nào? Escalation xảy ra lúc mấy giờ?",
+        "top_k_search": 10,
+        "top_k_select": 3
+      },
+      "output": {
+        "chunks_count": 3,
+        "sources": [
+          "sla_p1_2026.txt"
+        ]
+      },
+      "error": null
+    },
+    {
+      "worker": "synthesis_worker",
+      "input": {
+        "task": "Ticket P1 được tạo lúc 22:47. Ai sẽ nhận thông báo đầu tiên và qua kênh nào? Escalation xảy ra lúc mấy giờ?",
+        "chunks_count": 3,
+        "has_policy": false
+      },
+      "output": {
+        "answer_length": 273,
+        "sources": [
+          "sla_p1_2026.txt"
+        ],
+        "confidence": 0.63
+      },
+      "error": null
+    }
+  ],
+  "question_id": "q11"
+}

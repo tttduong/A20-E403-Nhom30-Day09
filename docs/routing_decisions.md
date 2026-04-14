@@ -3,11 +3,6 @@
 **Nhóm:** Nhom30  
 **Ngày:** 2026-04-14
 
-> **Hướng dẫn:** Ghi lại ít nhất **3 quyết định routing** thực tế từ trace của nhóm.
-> Không ghi giả định — phải từ trace thật (`artifacts/traces/`).
-> 
-> Mỗi entry phải có: task đầu vào → worker được chọn → route_reason → kết quả thực tế.
-
 ---
 
 ## Routing Decision #1
@@ -23,9 +18,9 @@
 **Kết quả thực tế:**
 - final_answer (ngắn): Extract từ policy doc về “7 ngày làm việc…” (grounded) + cite `[policy_refund_v4.txt]`
 - confidence: 0.83
-- Correct routing? Yes / No
+- Correct routing: Yes
 
-**Nhận xét:** _(Routing này đúng hay sai? Nếu sai, nguyên nhân là gì?)_
+**Nhận xét:**
 
 Đúng. Câu hỏi policy/refund nên đi qua policy worker để xử lý exceptions/temporal scoping nếu có; retrieval bổ sung evidence chunks trước synthesis.
 
@@ -44,7 +39,7 @@
 **Kết quả thực tế:**
 - final_answer (ngắn): Extract SLA P1 response/escalation rule + cite `[sla_p1_2026.txt]`
 - confidence: 0.67
-- Correct routing? Yes / No
+- Correct routing: Yes
 
 **Nhận xét:**
 
@@ -57,7 +52,7 @@
 **Task đầu vào:**
 > ERR-403-AUTH là lỗi gì và cách xử lý?
 
-**Worker được chọn:** `human_review` (HITL placeholder)  
+**Worker được chọn:** `human_review` (HITL lab-mode auto-approve)  
 **Route reason (từ trace):** `Risk_high + unknown error code (ERR-*) -> human_review | human approved → retrieval`  
 **MCP tools được gọi:** `[]`  
 **Workers called sequence:** `["human_review", "retrieval_worker", "synthesis_worker"]`
@@ -65,25 +60,11 @@
 **Kết quả thực tế:**
 - final_answer (ngắn): Abstain “Không đủ thông tin trong tài liệu nội bộ…” (không bịa)  
 - confidence: 0.10
-- Correct routing? Yes / No
+- Correct routing: Yes
 
 **Nhận xét:**
 
 Đúng. Với mã lỗi `ERR-*` không có trong KB, hệ thống trigger HITL và synthesis có guardrail để abstain nếu chunks không chứa đúng mã lỗi.
-
----
-
-## Routing Decision #4 (tuỳ chọn — bonus)
-
-**Task đầu vào:**
-> _________________
-
-**Worker được chọn:** `___________________`  
-**Route reason:** `___________________`
-
-**Nhận xét: Đây là trường hợp routing khó nhất trong lab. Tại sao?**
-
-_________________
 
 ---
 
@@ -97,27 +78,19 @@ _________________
 | policy_tool_worker | 7 | 46% |
 | human_review | 0* | 0% |
 
-\* `human_review` là node tạm, nhưng `hitl_triggered` vẫn ghi nhận trong trace.
+\* `human_review` là node trung gian (auto-approve), nên `supervisor_route` cuối cùng quay về `retrieval_worker`; HITL vẫn được ghi nhận qua `hitl_triggered`.
 
 ### Routing Accuracy
 
-> Trong số X câu nhóm đã chạy, bao nhiêu câu supervisor route đúng?
-
-- Câu route đúng: 15 / 15 (theo `expected_route` trong `data/test_questions.json` + trace route_reason)  
-- Câu route sai (đã sửa bằng cách nào?): 0  
-- Câu trigger HITL: 1 (q09: `ERR-*`)
+- Câu route đúng: 14 / 15 (đối chiếu `expected_route` trong `data/test_questions.json`)  
+- Câu route sai: 1 (q02 bị route sang `policy_tool_worker` do keyword refund/policy ưu tiên)  
+- Câu trigger HITL: 2 (`q08`, `q09` trong latest traces)
 
 ### Lesson Learned về Routing
-
-> Quyết định kỹ thuật quan trọng nhất nhóm đưa ra về routing logic là gì?  
-> (VD: dùng keyword matching vs LLM classifier, threshold confidence cho HITL, v.v.)
 
 1. Keyword routing đủ tốt cho lab nếu `route_reason` rõ + có HITL cho case mơ hồ (`ERR-*`).
 2. “Policy/access” ưu tiên route sang `policy_tool_worker` để tránh bỏ sót exceptions (flash sale / digital product / activated product / temporal scoping).
 
 ### Route Reason Quality
-
-> Nhìn lại các `route_reason` trong trace — chúng có đủ thông tin để debug không?  
-> Nếu chưa, nhóm sẽ cải tiến format route_reason thế nào?
 
 Các `route_reason` hiện có format ổn cho debug (đều không phải "unknown"). Cải tiến tiếp theo: chuẩn hoá prefix theo taxonomy (SLA|REFUND|ACCESS|ERRORCODE) + kèm keyword matched để dễ audit.

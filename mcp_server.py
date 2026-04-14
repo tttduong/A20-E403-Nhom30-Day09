@@ -29,10 +29,6 @@ Chạy thử:
 """
 
 import os
-import warnings
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-warnings.filterwarnings("ignore", category=UserWarning)
 import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -110,7 +106,7 @@ TOOL_SCHEMAS = {
     },
     "create_ticket": {
         "name": "create_ticket",
-        "description": "Tạo ticket mới và lưu vào data/tickets.json. Ticket có ticket_id thật và persist sau khi server tắt.",
+        "description": "Tạo ticket mới trong hệ thống Jira (MOCK — không tạo thật trong lab).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -140,8 +136,8 @@ def tool_search_kb(query: str, top_k: int = 3) -> dict:
     """
     Tìm kiếm Knowledge Base bằng semantic search.
 
-    TODO Sprint 3: Kết nối với ChromaDB thực.
-    Hiện tại: Delegate sang retrieval worker.
+    Dùng dense retrieval qua ChromaDB (delegate sang retrieval worker).
+    Nếu dense fail ở retrieval layer, worker sẽ fallback lexical để không crash.
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
@@ -155,44 +151,75 @@ def tool_search_kb(query: str, top_k: int = 3) -> dict:
     }
 
 
-# Database files
-TICKETS_DB_PATH = os.path.join(os.path.dirname(__file__), "data", "tickets.json")
-ACCESS_RULES_DB_PATH = os.path.join(os.path.dirname(__file__), "data", "access_rules.json")
-
-def load_json_db(path):
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def save_json_db(path, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+# Mock ticket database
+MOCK_TICKETS = {
+    "P1-LATEST": {
+        "ticket_id": "IT-9847",
+        "priority": "P1",
+        "title": "API Gateway down — toàn bộ người dùng không đăng nhập được",
+        "status": "in_progress",
+        "assignee": "nguyen.van.a@company.internal",
+        "created_at": "2026-04-13T22:47:00",
+        "sla_deadline": "2026-04-14T02:47:00",
+        "escalated": True,
+        "escalated_to": "senior_engineer_team",
+        "notifications_sent": ["slack:#incident-p1", "email:incident@company.internal", "pagerduty:oncall"],
+    },
+    "IT-1234": {
+        "ticket_id": "IT-1234",
+        "priority": "P2",
+        "title": "Feature login chậm cho một số user",
+        "status": "open",
+        "assignee": None,
+        "created_at": "2026-04-13T09:15:00",
+        "sla_deadline": "2026-04-14T09:15:00",
+        "escalated": False,
+    },
+}
 
 
 def tool_get_ticket_info(ticket_id: str) -> dict:
     """
-    Tra cứu thông tin ticket từ Database thực (JSON file).
+    Tra cứu thông tin ticket (mock data).
     """
-    tickets = load_json_db(TICKETS_DB_PATH)
-    ticket = tickets.get(ticket_id.upper())
+    ticket = MOCK_TICKETS.get(ticket_id.upper())
     if ticket:
         return ticket
     # Không tìm thấy
     return {
         "error": f"Ticket '{ticket_id}' không tìm thấy trong hệ thống.",
-        "available_ids": list(tickets.keys()),
+        "available_mock_ids": list(MOCK_TICKETS.keys()),
     }
+
+
+# Mock access control rules
+ACCESS_RULES = {
+    1: {
+        "required_approvers": ["Line Manager"],
+        "emergency_can_bypass": False,
+        "note": "Standard user access",
+    },
+    2: {
+        "required_approvers": ["Line Manager", "IT Admin"],
+        "emergency_can_bypass": True,
+        "emergency_bypass_note": "Level 2 có thể cấp tạm thời với approval đồng thời của Line Manager và IT Admin on-call.",
+        "note": "Elevated access",
+    },
+    3: {
+        "required_approvers": ["Line Manager", "IT Admin", "IT Security"],
+        "emergency_can_bypass": False,
+        "note": "Admin access — không có emergency bypass",
+    },
+}
 
 
 def tool_check_access_permission(access_level: int, requester_role: str, is_emergency: bool = False) -> dict:
     """
-    Kiểm tra điều kiện cấp quyền lấy từ Database thực (JSON file).
+    Kiểm tra điều kiện cấp quyền theo Access Control SOP.
     """
-    rules = load_json_db(ACCESS_RULES_DB_PATH)
-    rule = rules.get(str(access_level))
+    rule = ACCESS_RULES.get(access_level)
     if not rule:
-        return {"error": f"Access level {access_level} không hợp lệ. Levels: {list(rules.keys())}."}
+        return {"error": f"Access level {access_level} không hợp lệ. Levels: 1, 2, 3."}
 
     can_grant = True
     notes = []
@@ -216,11 +243,9 @@ def tool_check_access_permission(access_level: int, requester_role: str, is_emer
 
 def tool_create_ticket(priority: str, title: str, description: str = "") -> dict:
     """
-    Tạo ticket mới, lưu thẳng vào Database thực (JSON file).
+    Tạo ticket mới (MOCK — in log, không tạo thật).
     """
-    tickets = load_json_db(TICKETS_DB_PATH)
-    mock_id = f"IT-{9900 + len(tickets) + 1}"
-    
+    mock_id = f"IT-{9900 + hash(title) % 99}"
     ticket = {
         "ticket_id": mock_id,
         "priority": priority,
@@ -229,13 +254,9 @@ def tool_create_ticket(priority: str, title: str, description: str = "") -> dict
         "status": "open",
         "created_at": datetime.now().isoformat(),
         "url": f"https://jira.company.internal/browse/{mock_id}",
-        "note": "Ticket đã được tạo thật trong hệ thống (tickets.json)",
+        "note": "MOCK ticket — không tồn tại trong hệ thống thật",
     }
-    
-    tickets[mock_id] = ticket
-    save_json_db(TICKETS_DB_PATH, tickets)
-    
-    print(f"  [MCP create_ticket] REAL DB INSERT: {mock_id} | {priority} | {title[:50]}")
+    print(f"  [MCP create_ticket] MOCK: {mock_id} | {priority} | {title[:50]}")
     return ticket
 
 
@@ -427,7 +448,7 @@ def create_app():
         from fastapi.responses import RedirectResponse
         from pydantic import BaseModel
     except ImportError:
-        print("❌ FastAPI chưa cài. Chạy: pip install fastapi uvicorn")
+        # FastAPI là optional cho bonus HTTP server; không cần in warning mỗi lần import.
         return None
 
     app = FastAPI(
