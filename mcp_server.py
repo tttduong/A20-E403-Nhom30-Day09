@@ -139,31 +139,16 @@ def tool_search_kb(query: str, top_k: int = 3) -> dict:
     TODO Sprint 3: Kết nối với ChromaDB thực.
     Hiện tại: Delegate sang retrieval worker.
     """
-    try:
-        # Tái dùng retrieval logic từ workers/retrieval.py
-        import sys
-        sys.path.insert(0, os.path.dirname(__file__))
-        from workers.retrieval import retrieve_dense, TOP_K_SEARCH
-        chunks = retrieve_dense(query, top_k_search=max(top_k * 3, TOP_K_SEARCH), top_k_select=top_k)
-        sources = list({c["source"] for c in chunks})
-        return {
-            "chunks": chunks,
-            "sources": sources,
-            "total_found": len(chunks),
-        }
-    except Exception as e:
-        # Fallback: return mock data nếu ChromaDB chưa setup
-        return {
-            "chunks": [
-                {
-                    "text": f"[MOCK] Không thể query ChromaDB: {e}. Kết quả giả lập.",
-                    "source": "mock_data",
-                    "score": 0.5,
-                }
-            ],
-            "sources": ["mock_data"],
-            "total_found": 1,
-        }
+    import sys
+    sys.path.insert(0, os.path.dirname(__file__))
+    from workers.retrieval import retrieve_dense, TOP_K_SEARCH
+    chunks = retrieve_dense(query, top_k_search=max(top_k * 3, TOP_K_SEARCH), top_k_select=top_k)
+    sources = list({c["source"] for c in chunks})
+    return {
+        "chunks": chunks,
+        "sources": sources,
+        "total_found": len(chunks),
+    }
 
 
 # Mock ticket database
@@ -295,6 +280,39 @@ def list_tools() -> list:
     return list(TOOL_SCHEMAS.values())
 
 
+def call_mcp_with_trace(tool_name: str, tool_input: dict) -> dict:
+    """
+    Gọi MCP tool và trả về bản ghi trace đúng chuẩn Sprint 3.
+
+    Format trả về (chuẩn MCP trace):
+        {
+          "tool": "search_kb",
+          "input": {"query": "...", "top_k": 3},
+          "output": {"chunks": [...], "sources": [...]},
+          "timestamp": "2026-04-13T14:32:11"
+        }
+
+    Nếu tool thất bại, "output" là None và có thêm trường "error".
+    """
+    ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    raw = dispatch_tool(tool_name, tool_input)
+
+    if "error" in raw:
+        return {
+            "tool": tool_name,
+            "input": tool_input,
+            "output": None,
+            "error": raw["error"],
+            "timestamp": ts,
+        }
+    return {
+        "tool": tool_name,
+        "input": tool_input,
+        "output": raw,
+        "timestamp": ts,
+    }
+
+
 def dispatch_tool(tool_name: str, tool_input: dict) -> dict:
     """
     MCP execution: nhận tool_name và input, gọi tool tương ứng.
@@ -332,6 +350,26 @@ def dispatch_tool(tool_name: str, tool_input: dict) -> dict:
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import sys as _sys
+    _args = _sys.argv[1:]
+
+    # ── Server mode: python mcp_server.py --server [--port N] ──
+    if "--server" in _args:
+        _port = 8000
+        if "--port" in _args:
+            _idx = _args.index("--port")
+            if _idx + 1 < len(_args):
+                _port = int(_args[_idx + 1])
+        import uvicorn
+        print(f"\n🚀 Khởi động MCP HTTP Server trên port {_port}...")
+        print(f"   GET  http://localhost:{_port}/tools/list")
+        print(f"   POST http://localhost:{_port}/tools/call")
+        print(f"   GET  http://localhost:{_port}/health")
+        print(f"   Docs http://localhost:{_port}/docs")
+        uvicorn.run("mcp_server:app", host="0.0.0.0", port=_port, reload=False)
+        _sys.exit(0)
+
+    # ── Test mode (default) ──
     print("=" * 60)
     print("MCP Server — Tool Discovery & Test")
     print("=" * 60)
@@ -369,10 +407,121 @@ if __name__ == "__main__":
     print(f"  emergency_override: {perm.get('emergency_override')}")
     print(f"  notes: {perm.get('notes')}")
 
-    # 5. Test invalid tool
-    print("\n❌ Test: invalid tool")
+    # 5. Test invalid tool — dispatch_tool phải trả error dict, KHÔNG được crash
+    print("\n🛡️  Test: invalid tool (graceful error handling)")
     err = dispatch_tool("nonexistent_tool", {})
-    print(f"  Error: {err.get('error')}")
+    assert "error" in err, "dispatch_tool phải trả về error dict khi tool không tồn tại"
+    print(f"  ✅ dispatch_tool trả error dict (không crash): {err.get('error')}")
 
     print("\n✅ MCP server test done.")
-    print("\nTODO Sprint 3: Implement HTTP server nếu muốn bonus +2.")
+    print("\n" + "=" * 60)
+    print("HTTP Server (Bonus +2)")
+    print("=" * 60)
+    print("Chạy HTTP server: python mcp_server.py --server")
+    print("Endpoints:")
+    print("  GET  http://localhost:8000/tools/list")
+    print("  POST http://localhost:8000/tools/call")
+    print("       Body: {\"tool_name\": \"search_kb\", \"tool_input\": {\"query\": \"SLA P1\"}}")
+
+
+# ─────────────────────────────────────────────
+# HTTP Server — Sprint 3 Bonus +2
+# FastAPI expose MCP tools qua REST endpoints
+# ─────────────────────────────────────────────
+
+def create_app():
+    """
+    Tạo FastAPI app expose MCP tools qua HTTP.
+
+    Endpoints:
+        GET  /tools/list          → liệt kê tất cả tools (schema discoverable)
+        POST /tools/call          → gọi tool theo tên và input
+        GET  /health              → health check
+
+    Chạy:
+        python mcp_server.py --server
+        # hoặc
+        uvicorn mcp_server:app --reload
+    """
+    try:
+        from fastapi import FastAPI, HTTPException
+        from fastapi.responses import RedirectResponse
+        from pydantic import BaseModel
+    except ImportError:
+        print("❌ FastAPI chưa cài. Chạy: pip install fastapi uvicorn")
+        return None
+
+    app = FastAPI(
+        title="MCP Server — Day 09 Lab",
+        description=(
+            "Mock MCP server expose IT Helpdesk tools qua REST API.\n\n"
+            "**Tools có sẵn:** `search_kb`, `get_ticket_info`, `check_access_permission`, `create_ticket`\n\n"
+            "Gọi tool qua `POST /tools/call` với body `{tool_name, tool_input}`."
+        ),
+        version="1.0.0",
+        openapi_tags=[
+            {"name": "Tools", "description": "MCP tool discovery và execution"},
+            {"name": "System", "description": "Health check và server info"},
+        ],
+    )
+
+    class ToolCallRequest(BaseModel):
+        tool_name: str
+        tool_input: dict = {}
+
+        model_config = {
+            "json_schema_extra": {
+                "examples": [
+                    {
+                        "tool_name": "search_kb",
+                        "tool_input": {"query": "SLA P1 resolution time", "top_k": 3},
+                    }
+                ]
+            }
+        }
+
+    @app.get("/", include_in_schema=False)
+    def root():
+        return RedirectResponse(url="/docs")
+
+    @app.get("/health", tags=["System"], summary="Health check")
+    def health():
+        """Kiểm tra server đang chạy và số tools có sẵn."""
+        return {"status": "ok", "tools_count": len(TOOL_REGISTRY), "tools": list(TOOL_REGISTRY.keys())}
+
+    @app.get(
+        "/tools/list",
+        tags=["Tools"],
+        summary="Liệt kê tất cả MCP tools",
+        response_description="Danh sách tools kèm inputSchema và outputSchema",
+    )
+    def tools_list():
+        """
+        Trả về danh sách tất cả tools và schema của chúng.
+        Tương đương với `tools/list` trong MCP protocol.
+        """
+        return {"tools": list_tools()}
+
+    @app.post(
+        "/tools/call",
+        tags=["Tools"],
+        summary="Gọi một MCP tool",
+        response_description="Kết quả tool kèm trace timestamp",
+    )
+    def tools_call(req: ToolCallRequest):
+        """
+        Gọi MCP tool theo tên và input. Tương đương với `tools/call` trong MCP protocol.
+
+        - Tool không tồn tại → HTTP 400 (không crash server)
+        - Tool lỗi runtime → HTTP 400 với error detail
+        - Thành công → trace record `{tool, input, output, timestamp}`
+        """
+        result = call_mcp_with_trace(req.tool_name, req.tool_input)
+        if result.get("output") is None and "error" in result:
+            raise HTTPException(status_code=400, detail=result)
+        return result
+
+    return app
+
+
+app = create_app()  # export cho uvicorn: uvicorn mcp_server:app
