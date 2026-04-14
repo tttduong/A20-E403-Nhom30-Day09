@@ -166,7 +166,7 @@ def human_review_node(state: AgentState) -> AgentState:
 
 def retrieval_worker_node(state: AgentState) -> AgentState:
     """Wrapper gọi retrieval worker."""
-    # TODO Sprint 2: Thay bằng retrieval_run(state) (DONE - Placeholder for now)
+    # Sprint 2: Thay bằng retrieval_run(state) (DONE - Placeholder for now)
     state["workers_called"].append("retrieval_worker")
     state["history"].append("[retrieval_worker] called")
 
@@ -181,7 +181,7 @@ def retrieval_worker_node(state: AgentState) -> AgentState:
 
 def policy_tool_worker_node(state: AgentState) -> AgentState:
     """Wrapper gọi policy/tool worker."""
-    # TODO Sprint 2: Thay bằng policy_tool_run(state) (DONE - Placeholder for now)
+    # Sprint 2: Thay bằng policy_tool_run(state) (DONE - Placeholder for now)
     state["workers_called"].append("policy_tool_worker")
     state["history"].append("[policy_tool_worker] called")
 
@@ -198,7 +198,7 @@ def policy_tool_worker_node(state: AgentState) -> AgentState:
 
 def synthesis_worker_node(state: AgentState) -> AgentState:
     """Wrapper gọi synthesis worker."""
-    # TODO Sprint 2: Thay bằng synthesis_run(state) (DONE - Placeholder for now)
+    # Sprint 2: Thay bằng synthesis_run(state) (DONE - Placeholder for now)
     state["workers_called"].append("synthesis_worker")
     state["history"].append("[synthesis_worker] called")
 
