@@ -1,7 +1,7 @@
 # Báo Cáo Cá Nhân — Lab Day 09: Multi-Agent Orchestration
 
 **Họ và tên:** Nguyễn Thị Thu Hiền - 2A202600212  
-**Vai trò trong nhóm:** Supervisor Owner / Sprint 1 
+**Vai trò trong nhóm:** Supervisor Owner / Sprint1
 **Ngày nộp:** 14/04/2026  
 **Độ dài yêu cầu:** 500–800 từ
 
