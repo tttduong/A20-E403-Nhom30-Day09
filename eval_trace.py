@@ -188,6 +188,19 @@ def analyze_traces(traces_dir: str = "artifacts/traces") -> dict:
         with open(os.path.join(traces_dir, fname)) as f:
             traces.append(json.load(f))
 
+    # Prefer the latest trace per question_id (from eval runs) to avoid mixing
+    # manual runs with test question runs.
+    eval_traces = [t for t in traces if t.get("question_id")]
+    if eval_traces:
+        latest_by_qid = {}
+        for t in eval_traces:
+            qid = t.get("question_id")
+            ts = t.get("timestamp") or ""
+            prev = latest_by_qid.get(qid)
+            if prev is None or (ts and ts >= (prev.get("timestamp") or "")):
+                latest_by_qid[qid] = t
+        traces = list(latest_by_qid.values())
+
     # Compute metrics
     routing_counts = {}
     confidences = []
@@ -205,7 +218,7 @@ def analyze_traces(traces_dir: str = "artifacts/traces") -> dict:
             confidences.append(conf)
 
         lat = t.get("latency_ms")
-        if lat:
+        if lat is not None:
             latencies.append(lat)
 
         if t.get("mcp_tools_used"):

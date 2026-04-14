@@ -30,6 +30,8 @@ Quy tắc nghiêm ngặt:
 5. Nếu có exceptions/ngoại lệ → nêu rõ ràng trước khi kết luận.
 """
 
+ABSTAIN_MESSAGE = "Không đủ thông tin trong tài liệu nội bộ để trả lời câu hỏi này."
+
 
 def _call_llm(messages: list) -> str:
     """
@@ -77,10 +79,20 @@ def _build_context(chunks: list, policy_result: dict) -> str:
             score = chunk.get("score", 0)
             parts.append(f"[{i}] Nguồn: {source} (relevance: {score:.2f})\n{text}")
 
-    if policy_result and policy_result.get("exceptions_found"):
-        parts.append("\n=== POLICY EXCEPTIONS ===")
-        for ex in policy_result["exceptions_found"]:
-            parts.append(f"- {ex.get('rule', '')}")
+    if policy_result:
+        if policy_result.get("policy_version_note"):
+            parts.append("\n=== POLICY VERSION NOTE ===")
+            parts.append(str(policy_result.get("policy_version_note")))
+
+        if policy_result.get("exceptions_found"):
+            parts.append("\n=== POLICY EXCEPTIONS ===")
+            for ex in policy_result.get("exceptions_found", []):
+                rule = ex.get("rule", "")
+                src = ex.get("source", "")
+                if src:
+                    parts.append(f"- {rule} [{src}]")
+                else:
+                    parts.append(f"- {rule}")
 
     if not parts:
         return "(Không có context)"
@@ -115,6 +127,78 @@ def _estimate_confidence(chunks: list, answer: str, policy_result: dict) -> floa
     confidence = min(0.95, avg_score - exception_penalty)
     return round(max(0.1, confidence), 2)
 
+def _extract_sources_from_chunks(chunks: list) -> list[str]:
+    sources: list[str] = []
+    seen = set()
+    for c in chunks or []:
+        src = (c or {}).get("source", "unknown")
+        if src not in seen:
+            sources.append(src)
+            seen.add(src)
+    return sources
+
+
+def _has_any_citation(answer: str, sources: list[str]) -> bool:
+    a = (answer or "").lower()
+    for s in sources:
+        if not s:
+            continue
+        if f"[{s.lower()}]" in a:
+            return True
+    return False
+
+
+def _ensure_citations(answer: str, sources: list[str]) -> str:
+    """
+    Enforce at least 1 citation marker when we have evidence.
+    We keep it minimal to avoid rewriting user-facing content too much.
+    """
+    if not sources:
+        return answer
+    if _has_any_citation(answer, sources):
+        return answer
+    # If model forgot citations, append a short sources line (still grounded).
+    # Format requested in prompt: [tên_file]
+    cites = " ".join([f"[{s}]" for s in sources if s])
+    if not cites:
+        return answer
+    return (answer.rstrip() + f"\n\nNguồn: {cites}\n")
+
+
+def _fallback_summarize(task: str, chunks: list, policy_result: dict) -> str:
+    """
+    Fallback when LLM is unavailable: produce an extractive, grounded answer.
+    This is intentionally conservative to avoid hallucination.
+    """
+    # If policy exceptions exist, surface them first.
+    if policy_result and policy_result.get("exceptions_found"):
+        lines = []
+        if policy_result.get("policy_version_note"):
+            lines.append(str(policy_result["policy_version_note"]))
+        for ex in policy_result.get("exceptions_found", []):
+            rule = (ex or {}).get("rule", "").strip()
+            src = (ex or {}).get("source", "")
+            if rule:
+                lines.append(f"- {rule}" + (f" [{src}]" if src else ""))
+        if lines:
+            return "\n".join(lines)
+
+    # Otherwise: return the most relevant chunk verbatim (trimmed).
+    best = None
+    for c in chunks or []:
+        if best is None or c.get("score", 0) > best.get("score", 0):
+            best = c
+    if not best:
+        return ABSTAIN_MESSAGE
+
+    text = (best.get("text", "") or "").strip()
+    if len(text) > 700:
+        text = text[:700].rstrip() + "..."
+    src = best.get("source", "")
+    if src:
+        return f"{text}\n\nNguồn: [{src}]"
+    return text
+
 
 def synthesize(task: str, chunks: list, policy_result: dict) -> dict:
     """
@@ -123,6 +207,33 @@ def synthesize(task: str, chunks: list, policy_result: dict) -> dict:
     Returns:
         {"answer": str, "sources": list, "confidence": float}
     """
+    sources = _extract_sources_from_chunks(chunks)
+
+    # Hard abstain if no evidence. (Avoid hallucination penalty.)
+    if not chunks:
+        answer = ABSTAIN_MESSAGE
+        confidence = _estimate_confidence(chunks, answer, policy_result)
+        return {"answer": answer, "sources": [], "confidence": confidence}
+
+    # Guardrail: if task asks about specific ERR-* code but none of the chunks mention it,
+    # abstain instead of fabricating.
+    task_lower = (task or "").lower()
+    import re
+    m = re.search(r"\b(err-[a-z0-9_-]+)\b", task_lower)
+    if m:
+        code = m.group(1)
+        if not any(code in (c.get("text", "").lower()) for c in chunks):
+            answer = ABSTAIN_MESSAGE
+            confidence = _estimate_confidence([], answer, policy_result)
+            return {"answer": answer, "sources": [], "confidence": confidence}
+
+    # Guardrail: weak/irrelevant evidence → abstain.
+    max_score = max((c.get("score", 0.0) for c in chunks), default=0.0)
+    if max_score < 0.35:
+        answer = ABSTAIN_MESSAGE
+        confidence = _estimate_confidence([], answer, policy_result)
+        return {"answer": answer, "sources": [], "confidence": confidence}
+
     context = _build_context(chunks, policy_result)
 
     # Build messages
@@ -134,12 +245,19 @@ def synthesize(task: str, chunks: list, policy_result: dict) -> dict:
 
 {context}
 
+Yêu cầu bắt buộc:
+- Chỉ dùng thông tin có trong context, không suy đoán.
+- Nếu thiếu chi tiết để kết luận chắc chắn, hãy abstain rõ ràng: "{ABSTAIN_MESSAGE}"
+- Mỗi ý quan trọng phải có citation theo dạng [tên_file] (ví dụ: [sla_p1_2026.txt]).
+
 Hãy trả lời câu hỏi dựa vào tài liệu trên."""
         }
     ]
 
     answer = _call_llm(messages)
-    sources = list({c.get("source", "unknown") for c in chunks})
+    if isinstance(answer, str) and answer.startswith("[SYNTHESIS ERROR]"):
+        answer = _fallback_summarize(task, chunks, policy_result)
+    answer = _ensure_citations(answer, sources)
     confidence = _estimate_confidence(chunks, answer, policy_result)
 
     return {
@@ -177,6 +295,9 @@ def run(state: dict) -> dict:
         state["final_answer"] = result["answer"]
         state["sources"] = result["sources"]
         state["confidence"] = result["confidence"]
+        # Contract: confidence thấp thì nên trigger HITL
+        if state.get("confidence", 0.0) < 0.4:
+            state["hitl_triggered"] = True
 
         worker_io["output"] = {
             "answer_length": len(result["answer"]),

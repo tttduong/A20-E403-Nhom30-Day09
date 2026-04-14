@@ -1,0 +1,95 @@
+{
+  "task": "SLA xử lý ticket P1 là bao lâu?",
+  "route_reason": "Task contains SLA/P1/Ticket keyword -> retrieval_worker",
+  "risk_high": false,
+  "needs_tool": false,
+  "hitl_triggered": false,
+  "retrieved_chunks": [
+    {
+      "text": "SLA TICKET - QUY ĐỊNH XỬ LÝ SỰ CỐ\nSource: support/sla-p1-2026.pdf\nDepartment: IT\nEffective Date: 2026-01-15\nAccess: internal",
+      "source": "sla_p1_2026.txt",
+      "score": 0.7143,
+      "metadata": {
+        "retrieval": "lexical"
+      }
+    },
+    {
+      "text": "Ticket P1:\n- Phản hồi ban đầu (first response): 15 phút kể từ khi ticket được tạo.\n- Xử lý và khắc phục (resolution): 4 giờ.\n- Escalation: Tự động escalate lên Senior Engineer nếu không có phản hồi trong 10 phút.\n- Thông báo stakeholder: Ngay khi nhận ticket, update mỗi 30 phút cho đến khi resolve.",
+      "source": "sla_p1_2026.txt",
+      "score": 0.7143,
+      "metadata": {
+        "retrieval": "lexical"
+      }
+    },
+    {
+      "text": "Q: Hộp thư đến đầy, phải làm gì?\nA: Xóa email cũ hoặc yêu cầu tăng dung lượng qua ticket IT-ACCESS. Dung lượng tiêu chuẩn là 50GB.",
+      "source": "it_helpdesk_faq.txt",
+      "score": 0.5714,
+      "metadata": {
+        "retrieval": "lexical"
+      }
+    }
+  ],
+  "retrieved_sources": [
+    "sla_p1_2026.txt",
+    "it_helpdesk_faq.txt"
+  ],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "final_answer": "[SYNTHESIS ERROR] Không thể gọi LLM. Kiểm tra API key trong .env.\n\nNguồn: [sla_p1_2026.txt] [it_helpdesk_faq.txt]\n",
+  "sources": [
+    "sla_p1_2026.txt",
+    "it_helpdesk_faq.txt"
+  ],
+  "confidence": 0.67,
+  "history": [
+    "[supervisor] received task: SLA xử lý ticket P1 là bao lâu?",
+    "[supervisor] route=retrieval_worker reason=Task contains SLA/P1/Ticket keyword -> retrieval_worker",
+    "[retrieval_worker] retrieved 3 chunks from ['sla_p1_2026.txt', 'it_helpdesk_faq.txt']",
+    "[synthesis_worker] answer generated, confidence=0.67, sources=['sla_p1_2026.txt', 'it_helpdesk_faq.txt']",
+    "[graph] completed in 870ms"
+  ],
+  "workers_called": [
+    "retrieval_worker",
+    "synthesis_worker"
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 870,
+  "run_id": "run_20260414_152729",
+  "worker_io_logs": [
+    {
+      "worker": "retrieval_worker",
+      "input": {
+        "task": "SLA xử lý ticket P1 là bao lâu?",
+        "top_k_search": 10,
+        "top_k_select": 3
+      },
+      "output": {
+        "chunks_count": 3,
+        "sources": [
+          "sla_p1_2026.txt",
+          "it_helpdesk_faq.txt"
+        ]
+      },
+      "error": null
+    },
+    {
+      "worker": "synthesis_worker",
+      "input": {
+        "task": "SLA xử lý ticket P1 là bao lâu?",
+        "chunks_count": 3,
+        "has_policy": false
+      },
+      "output": {
+        "answer_length": 114,
+        "sources": [
+          "sla_p1_2026.txt",
+          "it_helpdesk_faq.txt"
+        ],
+        "confidence": 0.67
+      },
+      "error": null
+    }
+  ],
+  "question_id": "q01"
+}

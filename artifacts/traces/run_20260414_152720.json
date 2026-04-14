@@ -1,0 +1,100 @@
+{
+  "task": "Gặp lỗi hệ thống ERR-999 khi thực hiện escalation.",
+  "route_reason": "Risk_high + unknown error code (ERR-*) -> human_review | human approved → retrieval",
+  "risk_high": true,
+  "needs_tool": false,
+  "hitl_triggered": true,
+  "retrieved_chunks": [
+    {
+      "text": "Quy trình escalation khẩn cấp:\n1. On-call IT Admin có thể cấp quyền tạm thời (max 24 giờ) sau khi được Tech Lead phê duyệt bằng lời.\n2. Sau 24 giờ, phải có ticket chính thức hoặc quyền bị thu hồi tự động.\n3. Mọi quyền tạm thời phải được ghi log vào hệ thống Security Audit.",
+      "source": "access_control_sop.txt",
+      "score": 0.7143,
+      "metadata": {
+        "retrieval": "lexical"
+      }
+    },
+    {
+      "text": "Bước 1: Nhân viên gửi yêu cầu nghỉ phép qua hệ thống HR Portal (https://hr.company.internal) ít nhất 3 ngày làm việc trước ngày nghỉ.\nBước 2: Line Manager phê duyệt hoặc từ chối trong vòng 1 ngày làm việc.\nBước 3: Nhân viên nhận thông báo qua email sau khi được phê duyệt.",
+      "source": "hr_leave_policy.txt",
+      "score": 0.7143,
+      "metadata": {
+        "retrieval": "lexical"
+      }
+    },
+    {
+      "text": "=== Điều 2: Điều kiện được hoàn tiền ===\nKhách hàng được quyền yêu cầu hoàn tiền khi đáp ứng đủ các điều kiện sau:\n- Sản phẩm bị lỗi do nhà sản xuất, không phải do người dùng.\n- Yêu cầu được gửi trong vòng 7 ngày làm việc kể từ thời điểm xác nhận đơn hàng.\n- Đơn hàng chưa được sử dụng hoặc chưa bị mở seal.",
+      "source": "policy_refund_v4.txt",
+      "score": 0.7143,
+      "metadata": {
+        "retrieval": "lexical"
+      }
+    }
+  ],
+  "retrieved_sources": [
+    "policy_refund_v4.txt",
+    "hr_leave_policy.txt",
+    "access_control_sop.txt"
+  ],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "final_answer": "[SYNTHESIS ERROR] Không thể gọi LLM. Kiểm tra API key trong .env.\n\nNguồn: [access_control_sop.txt] [hr_leave_policy.txt] [policy_refund_v4.txt]\n",
+  "sources": [
+    "access_control_sop.txt",
+    "hr_leave_policy.txt",
+    "policy_refund_v4.txt"
+  ],
+  "confidence": 0.71,
+  "history": [
+    "[supervisor] received task: Gặp lỗi hệ thống ERR-999 khi thực hiện escalation.",
+    "[supervisor] route=human_review reason=Risk_high + unknown error code (ERR-*) -> human_review",
+    "[human_review] HITL triggered — awaiting human input",
+    "[retrieval_worker] retrieved 3 chunks from ['policy_refund_v4.txt', 'hr_leave_policy.txt', 'access_control_sop.txt']",
+    "[synthesis_worker] answer generated, confidence=0.71, sources=['access_control_sop.txt', 'hr_leave_policy.txt', 'policy_refund_v4.txt']",
+    "[graph] completed in 0ms"
+  ],
+  "workers_called": [
+    "human_review",
+    "retrieval_worker",
+    "synthesis_worker"
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 0,
+  "run_id": "run_20260414_152720",
+  "worker_io_logs": [
+    {
+      "worker": "retrieval_worker",
+      "input": {
+        "task": "Gặp lỗi hệ thống ERR-999 khi thực hiện escalation.",
+        "top_k_search": 10,
+        "top_k_select": 3
+      },
+      "output": {
+        "chunks_count": 3,
+        "sources": [
+          "policy_refund_v4.txt",
+          "hr_leave_policy.txt",
+          "access_control_sop.txt"
+        ]
+      },
+      "error": null
+    },
+    {
+      "worker": "synthesis_worker",
+      "input": {
+        "task": "Gặp lỗi hệ thống ERR-999 khi thực hiện escalation.",
+        "chunks_count": 3,
+        "has_policy": false
+      },
+      "output": {
+        "answer_length": 144,
+        "sources": [
+          "access_control_sop.txt",
+          "hr_leave_policy.txt",
+          "policy_refund_v4.txt"
+        ],
+        "confidence": 0.71
+      },
+      "error": null
+    }
+  ]
+}

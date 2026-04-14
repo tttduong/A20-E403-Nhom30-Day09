@@ -1,0 +1,99 @@
+{
+  "task": "Ticket P1 không được phản hồi sau 10 phút. Hệ thống tự động làm gì?",
+  "route_reason": "Task contains SLA/P1/Ticket keyword -> retrieval_worker",
+  "risk_high": false,
+  "needs_tool": false,
+  "hitl_triggered": false,
+  "retrieved_chunks": [
+    {
+      "text": "Ticket P1:\n- Phản hồi ban đầu (first response): 15 phút kể từ khi ticket được tạo.\n- Xử lý và khắc phục (resolution): 4 giờ.\n- Escalation: Tự động escalate lên Senior Engineer nếu không có phản hồi trong 10 phút.\n- Thông báo stakeholder: Ngay khi nhận ticket, update mỗi 30 phút cho đến khi resolve.",
+      "source": "sla_p1_2026.txt",
+      "score": 0.875,
+      "metadata": {
+        "retrieval": "lexical"
+      }
+    },
+    {
+      "text": "Quy trình escalation khẩn cấp:\n1. On-call IT Admin có thể cấp quyền tạm thời (max 24 giờ) sau khi được Tech Lead phê duyệt bằng lời.\n2. Sau 24 giờ, phải có ticket chính thức hoặc quyền bị thu hồi tự động.\n3. Mọi quyền tạm thời phải được ghi log vào hệ thống Security Audit.",
+      "source": "access_control_sop.txt",
+      "score": 0.8125,
+      "metadata": {
+        "retrieval": "lexical"
+      }
+    },
+    {
+      "text": "=== Điều 2: Điều kiện được hoàn tiền ===\nKhách hàng được quyền yêu cầu hoàn tiền khi đáp ứng đủ các điều kiện sau:\n- Sản phẩm bị lỗi do nhà sản xuất, không phải do người dùng.\n- Yêu cầu được gửi trong vòng 7 ngày làm việc kể từ thời điểm xác nhận đơn hàng.\n- Đơn hàng chưa được sử dụng hoặc chưa bị mở seal.",
+      "source": "policy_refund_v4.txt",
+      "score": 0.8125,
+      "metadata": {
+        "retrieval": "lexical"
+      }
+    }
+  ],
+  "retrieved_sources": [
+    "access_control_sop.txt",
+    "sla_p1_2026.txt",
+    "policy_refund_v4.txt"
+  ],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "final_answer": "[SYNTHESIS ERROR] Không thể gọi LLM. Kiểm tra API key trong .env.\n\nNguồn: [sla_p1_2026.txt] [access_control_sop.txt] [policy_refund_v4.txt]\n",
+  "sources": [
+    "sla_p1_2026.txt",
+    "access_control_sop.txt",
+    "policy_refund_v4.txt"
+  ],
+  "confidence": 0.83,
+  "history": [
+    "[supervisor] received task: Ticket P1 không được phản hồi sau 10 phút. Hệ thống tự động làm gì?",
+    "[supervisor] route=retrieval_worker reason=Task contains SLA/P1/Ticket keyword -> retrieval_worker",
+    "[retrieval_worker] retrieved 3 chunks from ['access_control_sop.txt', 'sla_p1_2026.txt', 'policy_refund_v4.txt']",
+    "[synthesis_worker] answer generated, confidence=0.83, sources=['sla_p1_2026.txt', 'access_control_sop.txt', 'policy_refund_v4.txt']",
+    "[graph] completed in 0ms"
+  ],
+  "workers_called": [
+    "retrieval_worker",
+    "synthesis_worker"
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 0,
+  "run_id": "run_20260414_152801_263378",
+  "worker_io_logs": [
+    {
+      "worker": "retrieval_worker",
+      "input": {
+        "task": "Ticket P1 không được phản hồi sau 10 phút. Hệ thống tự động làm gì?",
+        "top_k_search": 10,
+        "top_k_select": 3
+      },
+      "output": {
+        "chunks_count": 3,
+        "sources": [
+          "access_control_sop.txt",
+          "sla_p1_2026.txt",
+          "policy_refund_v4.txt"
+        ]
+      },
+      "error": null
+    },
+    {
+      "worker": "synthesis_worker",
+      "input": {
+        "task": "Ticket P1 không được phản hồi sau 10 phút. Hệ thống tự động làm gì?",
+        "chunks_count": 3,
+        "has_policy": false
+      },
+      "output": {
+        "answer_length": 140,
+        "sources": [
+          "sla_p1_2026.txt",
+          "access_control_sop.txt",
+          "policy_refund_v4.txt"
+        ],
+        "confidence": 0.83
+      },
+      "error": null
+    }
+  ],
+  "question_id": "q06"
+}
