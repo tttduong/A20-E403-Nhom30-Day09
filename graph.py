@@ -21,7 +21,8 @@ class AgentState(TypedDict):
     retrieved_chunks: list              # Output từ retrieval_worker
     retrieved_sources: list              # Danh sách nguồn tài liệu
     policy_result: dict                 # Output từ policy_tool_worker
-    mcp_tools_used: list                # Danh sách MCP tools đã gọi
+    mcp_tools_used: list                # Danh sách MCP tools đã gọi (legacy)
+    mcp_tool_called: list               # Sprint 3: trace record mỗi lần gọi MCP (format chuẩn)
 
     # Final output
     final_answer: str                   # Câu trả lời tổng hợp
@@ -48,6 +49,7 @@ def make_initial_state(task: str) -> AgentState:
         "retrieved_sources": [],
         "policy_result": {},
         "mcp_tools_used": [],
+        "mcp_tool_called": [],
         "final_answer": "",
         "sources": [],
         "confidence": 0.0,
@@ -108,6 +110,12 @@ def supervisor_node(state: AgentState) -> AgentState:
     if risk_high and "err-" in task:
         route = "human_review"
         route_reason = "Risk_high + unknown error code (ERR-*) -> human_review"
+
+    # Log quyết định dùng MCP hay không vào route_reason (Sprint 3 requirement)
+    if needs_tool:
+        route_reason += " | [MCP: sẽ dùng MCP — policy worker cần tool calls]"
+    else:
+        route_reason += " | [MCP: không dùng MCP — chỉ retrieval thuần]"
 
     state["supervisor_route"] = route
     state["route_reason"] = route_reason
